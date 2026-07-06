@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Antigravity GPU Price Tracker</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="logo">🚀</div>
+                <div class="brand-text">
+                    <h1>Antigravity</h1>
+                    <span>GPU Tracker</span>
+                </div>
+            </div>
+            
+            <nav class="nav-menu">
+                <button class="nav-item active" onclick="switchTab('dashboard')">
+                    <span class="icon">📊</span> Panel de GPUs
+                </button>
+                <button class="nav-item" onclick="switchTab('deals')">
+                    <span class="icon">🔥</span> Ofertas Encontradas
+                </button>
+                <button class="nav-item" onclick="switchTab('auctions')">
+                    <span class="icon">🔨</span> Subastas de eBay
+                </button>
+                <button class="nav-item" onclick="switchTab('config')">
+                    <span class="icon">⚙️</span> Configuración
+                </button>
+                <button class="nav-item" onclick="switchTab('console')">
+                    <span class="icon">🖥️</span> Consola / Log
+                </button>
+                <button class="nav-item" onclick="switchTab('suggestions')">
+                    <span class="icon">💡</span> Automatización y Mejoras
+                </button>
+            </nav>
+            
+            <div class="scanner-widget">
+                <div class="widget-header">
+                    <span class="status-indicator" id="scanner-indicator"></span>
+                    <span id="scanner-state">Cargando...</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="scanner-progress-bar"></div>
+                </div>
+                <div class="progress-text" id="scanner-progress-text">Idle</div>
+                <button class="btn btn-primary btn-block" id="btn-scan" onclick="triggerScan()">
+                    Escanear Ahora
+                </button>
+            </div>
+
+            <div class="scheduler-widget" style="margin-top: 15px; background-color: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; font-size: 0.85rem; box-shadow: var(--shadow-sm);">
+                <div class="widget-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-weight: 600;">
+                    <span>📅 Planificador Diario</span>
+                    <span id="scheduler-active-badge" class="badge" style="font-size: 0.7rem; padding: 2px 6px; border-radius: 4px;">--</span>
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px; color: var(--text-secondary);">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Culiacán:</span>
+                        <span id="txt-culiacan-time" style="font-family: var(--font-mono); color: var(--text-primary);">--:--:--</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Horario:</span>
+                        <span style="color: var(--text-primary);">6 am - 12 am</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Siguiente:</span>
+                        <span id="txt-next-scan" style="color: var(--text-primary); text-align: right; font-size: 0.8rem;">--</span>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header -->
+            <header class="top-header">
+                <div class="header-title">
+                    <h2 id="current-tab-title">Panel de GPUs</h2>
+                    <p id="current-tab-desc">Estadísticas y valor del mercado de tarjetas gráficas en tiempo real.</p>
+                </div>
+                <div class="header-actions">
+                    <span class="time-label">Último Escaneo:</span>
+                    <span class="time-value" id="last-scan-time">Cargando...</span>
+                </div>
+            </header>
+
+            <!-- Dashboard Tab -->
+            <section id="tab-dashboard" class="tab-content active">
+                <div class="filter-bar">
+                    <label for="viability-filter">Filtrar por Viabilidad Vast.ai:</label>
+                    <select id="viability-filter" class="filter-select" onchange="filterCards()">
+                        <option value="all">Todos los modelos</option>
+                        <option value="sirve">🟢 Recomendadas (Sirve)</option>
+                        <option value="condicional">🟡 Condicionales</option>
+                        <option value="no_sirve">🔴 No recomendadas</option>
+                    </select>
+                </div>
+                <div class="grid-stats" id="gpu-cards-grid">
+                    <!-- Cards will be dynamically injected here -->
+                    <div class="loader-container"><div class="spinner"></div></div>
+                </div>
+            </section>
+
+            <!-- Deals Tab -->
+            <section id="tab-deals" class="tab-content">
+                <div class="deals-header">
+                    <h3>Alertas y Gangas Recientes</h3>
+                    <p>Listados activos con precios significativamente inferiores al valor real de mercado, ordenados por mayor descuento.</p>
+                </div>
+                <div class="filter-bar" style="flex-wrap: wrap; gap: 12px; align-items: center;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label for="deals-gpu-filter">Modelo GPU:</label>
+                        <select id="deals-gpu-filter" class="filter-select" onchange="filterDeals()">
+                            <option value="all">Todos los modelos</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label for="platform-filter">Plataforma:</label>
+                        <select id="platform-filter" class="filter-select" onchange="filterDeals()">
+                            <option value="all">Todas las plataformas</option>
+                            <option value="ebay">eBay</option>
+                            <option value="mercadolibre">MercadoLibre</option>
+                            <option value="facebook">Facebook Marketplace (Local)</option>
+                            <option value="bestbuy">🛒 Best Buy USA</option>
+                        </select>
+                    </div>
+                    <div id="city-filter-wrap" style="display: none; align-items: center; gap: 8px;">
+                        <label for="city-filter">Ciudad:</label>
+                        <select id="city-filter" class="filter-select" onchange="filterDeals()">
+                            <option value="all">Todas las ciudades</option>
+                            <option value="culiacan">Culiacán</option>
+                            <option value="losmochis">Los Mochis</option>
+                            <option value="tijuana">Tijuana</option>
+                            <option value="guadalajara">Guadalajara</option>
+                        </select>
+                    </div>
+                    <button id="btn-clear-deals" class="btn btn-danger" onclick="clearAllDeals()" style="margin-left: auto;">
+                        🗑️ Borrar Todas las Ofertas
+                    </button>
+                </div>
+                <div class="deals-list" id="deals-container">
+                    <!-- Deals will be injected here -->
+                    <div class="loader-container"><div class="spinner"></div></div>
+                </div>
+            </section>
+
+            <!-- Auctions Tab -->
+            <section id="tab-auctions" class="tab-content">
+                <div class="deals-header">
+                    <h3>Subastas Activas de eBay</h3>
+                    <p>Monitoreo de subastas en tiempo real comparadas con el valor de mercado para maximizar tu margen de ganancia.</p>
+                </div>
+                <div class="filter-bar">
+                    <label for="auction-gpu-filter">Filtrar por GPU:</label>
+                    <select id="auction-gpu-filter" class="filter-select" onchange="filterAuctions()">
+                        <option value="all">Todos los modelos</option>
+                    </select>
+                    
+                    <label for="auction-sort" style="margin-left: 20px;">Ordenar por:</label>
+                    <select id="auction-sort" class="filter-select" onchange="filterAuctions()">
+                        <option value="margin_desc">🟢 Mayor Margen ($ MXN)</option>
+                        <option value="time_asc">⏳ Terminando Pronto</option>
+                        <option value="price_asc">💰 Puja Más Baja</option>
+                        <option value="bids_desc">📊 Más Pujas/Popularidad</option>
+                    </select>
+                </div>
+                <div class="grid-stats" id="auctions-container">
+                    <div class="loader-container"><div class="spinner"></div></div>
+                </div>
+            </section>
+
+            <!-- Config Tab -->
+            <section id="tab-config" class="tab-content">
+                <div class="card card-config">
+                    <h3>Configuración de Alertas</h3>
+                    <p class="section-desc">Configura los destinos de webhooks para enviar notificaciones en tiempo real cuando se detecten ofertas.</p>
+                    
+                    <form id="config-form" onsubmit="saveConfig(event)">
+                        <div class="form-group">
+                            <label for="discord-webhook">Discord Webhook URL</label>
+                            <input type="url" id="discord-webhook" placeholder="https://discord.com/api/webhooks/..." class="form-control">
+                            <small class="form-help">Permite enviar tarjetas informativas formateadas con imágenes.</small>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="slack-webhook">Slack Webhook URL</label>
+                            <input type="url" id="slack-webhook" placeholder="https://hooks.slack.com/services/..." class="form-control">
+                            <small class="form-help">Envía mensajes en formato bloque de Slack.</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="discount-threshold">Umbral de Alerta de Descuento (<span id="threshold-val">15</span>%)</label>
+                            <div class="slider-container">
+                                <input type="range" id="discount-threshold" min="5" max="40" value="15" step="1" oninput="document.getElementById('threshold-val').innerText = this.value" class="slider">
+                            </div>
+                            <small class="form-help">Alertar solo si el precio está un X% o más por debajo del valor de mercado calculado (Moda).</small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>MercadoLibre Región</label>
+                            <input type="text" id="ml-site" value="MLM" readonly class="form-control read-only">
+                            <small class="form-help">Región por defecto configurada para México (MLM).</small>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success">Guardar Configuración</button>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Console Log Tab -->
+            <section id="tab-console" class="tab-content">
+                <div class="card card-console">
+                    <div class="console-header">
+                        <h3>Consola de Registro</h3>
+                        <button class="btn btn-outline" onclick="fetchStatus()">Refrescar</button>
+                    </div>
+                    <pre class="console-output" id="console-log">Cargando registros...</pre>
+                </div>
+            </section>
+
+            <!-- Suggestions / Automation Improvements Tab -->
+            <section id="tab-suggestions" class="tab-content">
+                <div class="deals-header" style="margin-bottom: 24px;">
+                    <h3>💡 Sugerencias de Automatización para GPUs y Subastas</h3>
+                    <p>Propuestas avanzadas diseñadas para ayudarte a conseguir la mejor tarjeta gráfica y ganar subastas de eBay con el mayor margen posible.</p>
+                </div>
+
+                <div class="suggestions-grid">
+                    
+                    <!-- Card 1: eBay Auction Auto-Sniper -->
+                    <div class="card suggestion-card" style="border-left: 4px solid var(--primary);">
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <h4 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">🎯 Sniper de Subastas & Avisos</h4>
+                                <span class="badge" style="background-color: rgba(59, 130, 246, 0.15); color: var(--primary); font-size: 0.75rem; padding: 2px 8px; border-radius: 4px;">Recomendado</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 12px; line-height: 1.45;">
+                                Las subastas se definen en los últimos segundos. Esta función calcula el cierre exacto de las subastas y envía una alerta móvil urgente (Telegram/WhatsApp) <strong>5 minutos</strong> y <strong>1 minuto</strong> antes de finalizar, solo si la puja sigue por debajo del umbral rentable.
+                            </p>
+                            <ul style="color: var(--text-secondary); font-size: 0.88rem; padding-left: 20px; line-height: 1.45; margin-bottom: 16px;">
+                                <li>Previene la sobrepuja emocional o de último segundo.</li>
+                                <li>Pulsos HTTP ultra-rápidos en los minutos críticos.</li>
+                                <li>Integración con Webhooks en tu móvil en tiempo real.</li>
+                            </ul>
+                        </div>
+                        <button class="btn btn-outline btn-block" onclick="alert('Esta propuesta requiere conectar APIs de mensajería (Telegram/Pushover) y un temporizador de precisión.')">Simular Activación</button>
+                    </div>
+
+                    <!-- Card 2: ROI & Net Profit Calculator (Vast.ai) -->
+                    <div class="card suggestion-card" style="border-left: 4px solid var(--success);">
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <h4 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">📈 Calculadora de ROI Neto (Vast.ai)</h4>
+                                <span class="badge" style="background-color: rgba(16, 185, 129, 0.15); color: var(--success); font-size: 0.75rem; padding: 2px 8px; border-radius: 4px;">Alta Rentabilidad</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 12px; line-height: 1.45;">
+                                Ingresa tu costo por kWh de electricidad en México (ej. $3.0 MXN/kWh) y calcula la ganancia neta mensual rentando la GPU para hosting de IA. Te muestra en cuántos meses amortizarás cada GPU listada.
+                            </p>
+                            <ul style="color: var(--text-secondary); font-size: 0.88rem; padding-left: 20px; line-height: 1.45; margin-bottom: 16px;">
+                                <li>Peticiones a la API de Vast.ai para estimar rentas en vivo.</li>
+                                <li>Deducción automática de consumo de energía eléctrica.</li>
+                                <li>Periodo de recuperación (payback) visible en cada oferta.</li>
+                            </ul>
+                        </div>
+                        <button class="btn btn-outline btn-block" onclick="alert('Esta propuesta se puede integrar mediante estimaciones matemáticas de retorno y APIs de Vast.ai.')">Simular Activación</button>
+                    </div>
+
+                    <!-- Card 3: US-MX Arbitrage & Import Tax Calculator -->
+                    <div class="card suggestion-card" style="border-left: 4px solid var(--warning);">
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <h4 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">✈️ Arbitraje USA-MX e Impuestos</h4>
+                                <span class="badge" style="background-color: rgba(245, 158, 11, 0.15); color: var(--warning); font-size: 0.75rem; padding: 2px 8px; border-radius: 4px;">Crítico para México</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 12px; line-height: 1.45;">
+                                Las subastas en USA tienen costos de envío internacional y aduanas. Calcula de forma automática el **Costo Real de Importación** (incluyendo el 16% de IVA aduanal y envío) para saber si conviene más que comprar local.
+                            </p>
+                            <ul style="color: var(--text-secondary); font-size: 0.88rem; padding-left: 20px; line-height: 1.45; margin-bottom: 16px;">
+                                <li>Filtra listados de USA que no hacen envío a México.</li>
+                                <li>Cálculo del 16% de IVA sobre valor declarado aduanal.</li>
+                                <li>Comparación directa: Comprar en MXN vs Importar.</li>
+                            </ul>
+                        </div>
+                        <button class="btn btn-outline btn-block" onclick="alert('Esta propuesta calcula los impuestos de importación estándar aplicables a electrónicos en México.')">Simular Activación</button>
+                    </div>
+
+                    <!-- Card 4: Smart Bid Cap (Límite Máximo de Puja) -->
+                    <div class="card suggestion-card" style="border-left: 4px solid var(--danger);">
+                        <div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                                <h4 style="margin: 0; font-size: 1.15rem; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">🛑 Puja Límite Recomendada</h4>
+                                <span class="badge" style="background-color: rgba(239, 68, 68, 0.15); color: var(--danger); font-size: 0.75rem; padding: 2px 8px; border-radius: 4px;">Seguridad</span>
+                            </div>
+                            <p style="color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 12px; line-height: 1.45;">
+                                Basado en el precio modal histórico y en el margen objetivo deseado (ej. 20% de ahorro), calcula cuál es la oferta máxima que deberías hacer. Al rebasar ese monto en vivo, el sistema descarta la subasta.
+                            </p>
+                            <ul style="color: var(--text-secondary); font-size: 0.88rem; padding-left: 20px; line-height: 1.45; margin-bottom: 16px;">
+                                <li>Calcula la puja límite exacta antes de ofertar en eBay.</li>
+                                <li>Evita pujar de más por presión competitiva.</li>
+                                <li>Clasifica las subastas en semáforo según su margen restante.</li>
+                            </ul>
+                        </div>
+                        <button class="btn btn-outline btn-block" onclick="alert('Esta propuesta automatiza los cálculos de tope de oferta según tus márgenes preestablecidos.')">Simular Activación</button>
+                    </div>
+
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Chart Modal Viewer -->
+    <div class="modal" id="chart-modal" onclick="closeModal(event)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <span class="close-btn" onclick="document.getElementById('chart-modal').classList.remove('active')">&times;</span>
+            <h3 id="modal-gpu-title">Distribución de Precios</h3>
+            <div class="modal-body">
+                <img id="modal-chart-img" src="" alt="Price distribution chart">
+            </div>
+        </div>
+    </div>
+
+    <!-- Script logic -->
+    <script>
+        let configData = {};
+        
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            
+            document.getElementById(`tab-${tabId}`).classList.add('active');
+            
+            // Find clicking button
+            const navBtn = Array.from(document.querySelectorAll('.nav-item')).find(btn => btn.innerText.includes({
+                'dashboard': 'Panel de GPUs',
+                'deals': 'Ofertas Encontradas',
+                'auctions': 'Subastas de eBay',
+                'config': 'Configuración',
+                'console': 'Consola / Log',
+                'suggestions': 'Automatización y Mejoras'
+            }[tabId]));
+            
+            if (navBtn) navBtn.classList.add('active');
+            
+            // Set Titles
+            const titleMap = {
+                'dashboard': ['Panel de GPUs', 'Estadísticas y valor del mercado de tarjetas gráficas en tiempo real.'],
+                'deals': ['Ofertas Encontradas', 'Listados activos con precios significativamente inferiores al valor real de mercado.'],
+                'auctions': ['Subastas Activas de eBay', 'Monitoreo de subastas en tiempo real comparadas con el valor de mercado para maximizar tu margen.'],
+                'config': ['Configuración del Sistema', 'Modifica los parámetros de búsqueda, umbrales y webhooks de alerta.'],
+                'console': ['Consola de Logs', 'Monitoreo en vivo de la recolección y análisis de datos de eBay y MercadoLibre.'],
+                'suggestions': ['Automatización y Mejoras', 'Sugerencias y propuestas para automatizar la compra de la mejor GPU al menor costo posible.']
+            };
+            
+            document.getElementById('current-tab-title').innerText = titleMap[tabId][0];
+            document.getElementById('current-tab-desc').innerText = titleMap[tabId][1];
+            
+            if (tabId === 'dashboard') {
+                fetchStats();
+            } else if (tabId === 'deals') {
+                fetchDeals();
+            } else if (tabId === 'auctions') {
+                fetchAuctions();
+            } else if (tabId === 'console') {
+                fetchStatus();
+            }
+        }
+
+        let allGpuStats = [];
+        let allDeals = [];
+
+        async function fetchStats() {
+            try {
+                const r = await fetch('/api/stats');
+                allGpuStats = await r.json();
+                filterCards();
+            } catch (e) {
+                console.error("Error fetching stats:", e);
+            }
+        }
+
+        function filterCards() {
+            const viabilityVal = document.getElementById('viability-filter').value;
+            let filtered = allGpuStats;
+            if (viabilityVal !== 'all') {
+                filtered = allGpuStats.filter(gpu => gpu.viability === viabilityVal);
+            }
+            renderCards(filtered);
+        }
+
+        function renderCards(stats) {
+            const grid = document.getElementById('gpu-cards-grid');
+            grid.innerHTML = '';
+            
+            if (stats.length === 0) {
+                grid.innerHTML = '<div class="no-data">No hay datos de GPUs para el filtro seleccionado.</div>';
+                return;
+            }
+            
+            stats.forEach(gpu => {
+                const hasStats = gpu.mode_price_usd > 0;
+                
+                const card = document.createElement('div');
+                card.className = `gpu-card ${hasStats ? '' : 'no-stats'}`;
+                
+                // Determine viability badge
+                let viabilityBadge = '';
+                if (gpu.viability === 'sirve') {
+                    viabilityBadge = `<span class="badge badge-viability sirve" title="Viable para hosting de IA en Vast.ai">🟢 SIRVE</span>`;
+                } else if (gpu.viability === 'condicional') {
+                    viabilityBadge = `<span class="badge badge-viability condicional" title="Viable bajo condiciones específicas (ej. electricidad barata o mods de VRAM)">🟡 CONDICIONAL</span>`;
+                } else {
+                    viabilityBadge = `<span class="badge badge-viability no_sirve" title="No recomendable para Vast.ai (baja VRAM, sin CUDA, etc.)">🔴 NO SIRVE</span>`;
+                }
+
+                let innerContent = `
+                    <div class="gpu-card-header">
+                        <div class="gpu-header-info">
+                            <h4>${gpu.name}</h4>
+                            <span class="viability-reason-text">${gpu.viability_reason}</span>
+                        </div>
+                        <div class="gpu-header-badges">
+                            ${viabilityBadge}
+                            <span class="badge badge-platform ${gpu.is_fallback ? 'fallback' : ''}">${gpu.is_fallback ? 'Precio Referencial' : gpu.sample_count + ' muestras'}</span>
+                        </div>
+                    </div>
+                `;
+                
+                if (hasStats) {
+                    innerContent += `
+                        <div class="gpu-prices">
+                            <div class="price-box price-mode">
+                                <span class="price-label">Moda (Mercado)</span>
+                                <span class="price-val">$${gpu.mode_price_mxn.toLocaleString(undefined, {maximumFractionDigits: 0})} MXN</span>
+                                <span class="price-sub">$${gpu.mode_price_usd.toLocaleString()} USD</span>
+                            </div>
+                            <div class="price-box">
+                                <span class="price-label">Mediana</span>
+                                <span class="price-val">$${gpu.median_price_mxn.toLocaleString(undefined, {maximumFractionDigits: 0})} MXN</span>
+                                <span class="price-sub">$${gpu.median_price_usd.toLocaleString()} USD</span>
+                            </div>
+                        </div>
+                        <div class="price-limits">
+                            <span>Rango común: $${gpu.min_price_mxn.toLocaleString(undefined, {maximumFractionDigits: 0})} - $${gpu.max_price_mxn.toLocaleString(undefined, {maximumFractionDigits: 0})} MXN</span>
+                        </div>
+                        <div class="gpu-card-actions">
+                            ${gpu.chart_url ? 
+                                `<button class="btn btn-outline btn-block" onclick="showChart('${gpu.name}', '${gpu.chart_url}')">Ver Gráfico de Distribución</button>` : 
+                                `<button class="btn btn-outline btn-block" disabled>Generando gráfico...</button>`
+                            }
+                        </div>
+                    `;
+                } else {
+                    innerContent += `
+                        <div class="empty-stats-body">
+                            <p>Aún no hay suficientes datos históricos.</p>
+                            <span>Límites de búsqueda: $${gpu.min_price_limit_mxn.toLocaleString(undefined, {maximumFractionDigits: 0})} - $${gpu.max_price_limit_mxn.toLocaleString(undefined, {maximumFractionDigits: 0})} MXN</span>
+                        </div>
+                    `;
+                }
+                
+                card.innerHTML = innerContent;
+                grid.appendChild(card);
+            });
+        }
+
+        async function fetchDeals() {
+            try {
+                const r = await fetch('/api/deals');
+                allDeals = await r.json();
+                populateDealsGpuFilter();
+                filterDeals();
+            } catch (e) {
+                console.error("Error fetching deals:", e);
+            }
+        }
+
+        function populateDealsGpuFilter() {
+            const filter = document.getElementById('deals-gpu-filter');
+            filter.innerHTML = '<option value="all">Todos los modelos</option>';
+            const models = {};
+            allDeals.forEach(d => { models[d.model_id] = d.model_name; });
+            for (const [id, name] of Object.entries(models)) {
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.innerText = name;
+                filter.appendChild(opt);
+            }
+        }
+
+        function filterDeals() {
+            const gpuVal = document.getElementById('deals-gpu-filter').value;
+            const platformVal = document.getElementById('platform-filter').value;
+            const cityFilterWrap = document.getElementById('city-filter-wrap');
+            const cityFilter = document.getElementById('city-filter');
+            
+            cityFilterWrap.style.display = (platformVal === 'facebook') ? 'flex' : 'none';
+            const cityVal = cityFilter.value;
+            
+            let filtered = allDeals;
+            if (gpuVal !== 'all') {
+                filtered = filtered.filter(deal => deal.model_id === gpuVal);
+            }
+            if (platformVal !== 'all') {
+                filtered = filtered.filter(deal => deal.platform === platformVal);
+            }
+            if (platformVal === 'facebook' && cityVal !== 'all') {
+                filtered = filtered.filter(deal => {
+                    const urlLower = (deal.url || "").toLowerCase();
+                    const titleLower = (deal.title || "").toLowerCase();
+                    return urlLower.includes(cityVal) || titleLower.includes(cityVal) || 
+                           (cityVal === 'losmochis' && (titleLower.includes('mochis') || urlLower.includes('mochis')));
+                });
+            }
+            // Always sort by highest discount percentage first (backend does this too, but enforce in UI)
+            filtered.sort((a, b) => (b.discount_percent || 0) - (a.discount_percent || 0));
+            renderDeals(filtered);
+        }
+
+        function renderDeals(deals) {
+            const container = document.getElementById('deals-container');
+            container.innerHTML = '';
+            
+            if (deals.length === 0) {
+                container.innerHTML = '<div class="no-data">No se han detectado ofertas reales aún, o ninguna coincide con el filtro seleccionado.<br><small style="opacity:0.6">Las ofertas aparecen tras ejecutar un escaneo que detecte precios significativamente por debajo del valor de mercado.</small></div>';
+                return;
+            }
+            
+            deals.forEach(deal => {
+                const card = document.createElement('div');
+                card.className = 'deal-row';
+                const discountPct = ((deal.discount_percent || 0) * 100).toFixed(1);
+                const savings = deal.price_mxn ? 
+                    `<span style="color: var(--success-color); font-size: 0.8rem;">Ahorras aprox. $${Math.round((deal.discount_percent||0) * deal.price_mxn / (1 - (deal.discount_percent||0.001))).toLocaleString()} MXN</span>` : '';
+                card.innerHTML = `
+                    <div class="deal-img">
+                        <img src="${deal.image_url || 'https://img.icons8.com/ios/100/video-card.png'}" alt="GPU Thumbnail">
+                    </div>
+                    <div class="deal-details">
+                        <div class="deal-title-row">
+                            <span class="badge-discount">${discountPct}% OFF</span>
+                            <h4><a href="${deal.url}" target="_blank">${deal.title}</a></h4>
+                        </div>
+                        <div class="deal-meta">
+                            <span><strong>Modelo:</strong> ${deal.model_name}</span>
+                            <span><strong>Plataforma:</strong> <span class="platform-name ${deal.platform}">${deal.platform.toUpperCase()}</span></span>
+                            <span><strong>Detectado:</strong> ${new Date(deal.alerted_at).toLocaleString()}</span>
+                        </div>
+                        ${savings}
+                    </div>
+                    <div class="deal-pricing">
+                        <div class="deal-current-price">$${(deal.price_mxn||0).toLocaleString(undefined, {maximumFractionDigits: 0})} MXN</div>
+                        <span class="original-currency">$${(deal.price_usd||0).toLocaleString(undefined, {maximumFractionDigits: 2})} USD</span>
+                        <a href="${deal.url}" target="_blank" class="btn btn-primary btn-sm deal-btn">Ir al Listado</a>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function clearAllDeals() {
+            if (!confirm('¿Seguro que deseas borrar todas las ofertas detectadas? Esta acción no se puede deshacer.')) return;
+            try {
+                const r = await fetch('/api/deals/clear', { method: 'POST' });
+                const res = await r.json();
+                if (res.success) {
+                    allDeals = [];
+                    renderDeals([]);
+                }
+            } catch (e) {
+                console.error('Error clearing deals:', e);
+            }
+        }
+
+        async function fetchStatus() {
+            try {
+                const r = await fetch('/api/status');
+                const status = await r.json();
+                
+                // Update widget
+                const indicator = document.getElementById('scanner-indicator');
+                const stateText = document.getElementById('scanner-state');
+                const progressBar = document.getElementById('scanner-progress-bar');
+                const progressText = document.getElementById('scanner-progress-text');
+                const btnScan = document.getElementById('btn-scan');
+                
+                if (status.is_running) {
+                    indicator.className = 'status-indicator running';
+                    stateText.innerText = 'Escaneando...';
+                    progressBar.classList.add('running-bar');
+                    progressText.innerText = status.progress;
+                    btnScan.disabled = true;
+                    btnScan.innerText = 'Escaneando...';
+                } else {
+                    indicator.className = 'status-indicator idle';
+                    stateText.innerText = 'Listo (Inactivo)';
+                    progressBar.classList.remove('running-bar');
+                    progressText.innerText = 'En espera';
+                    btnScan.disabled = false;
+                    btnScan.innerText = 'Escanear Ahora';
+                }
+                
+                document.getElementById('last-scan-time').innerText = status.last_run;
+                
+                // Update scheduler info
+                if (status.culiacan_time) {
+                    document.getElementById('txt-culiacan-time').innerText = status.culiacan_time.split(' ')[1]; // display HH:MM:SS
+                }
+                
+                const activeBadge = document.getElementById('scheduler-active-badge');
+                if (activeBadge) {
+                    if (status.is_active_window) {
+                        activeBadge.innerText = 'ACTIVO';
+                        activeBadge.style.backgroundColor = 'var(--success)';
+                        activeBadge.style.color = '#ffffff';
+                    } else {
+                        activeBadge.innerText = 'DORMIDO';
+                        activeBadge.style.backgroundColor = 'var(--text-muted)';
+                        activeBadge.style.color = '#ffffff';
+                    }
+                }
+                
+                if (status.next_scan_time) {
+                    if (status.seconds_until_next_scan > 0) {
+                        const mins = Math.floor(status.seconds_until_next_scan / 60);
+                        const secs = status.seconds_until_next_scan % 60;
+                        document.getElementById('txt-next-scan').innerText = `${status.next_scan_time.split(' ')[1]} (en ${mins}m ${secs}s)`;
+                    } else {
+                        document.getElementById('txt-next-scan').innerText = status.next_scan_time;
+                    }
+                }
+                
+                // Update Console
+                const consoleLog = document.getElementById('console-log');
+                if (status.log && status.log.length > 0) {
+                    consoleLog.innerText = status.log.join('\n');
+                    // auto scroll to bottom
+                    consoleLog.scrollTop = consoleLog.scrollHeight;
+                } else {
+                    consoleLog.innerText = "No hay logs registrados en esta sesión.";
+                }
+            } catch (e) {
+                console.error("Error fetching status:", e);
+            }
+        }
+
+        async function triggerScan() {
+            try {
+                const r = await fetch('/api/trigger_scan', { method: 'POST' });
+                const res = await r.json();
+                if (res.success) {
+                    fetchStatus();
+                    // Poll status periodically while running
+                    const interval = setInterval(async () => {
+                        await fetchStatus();
+                        const r2 = await fetch('/api/status');
+                        const s = await r2.json();
+                        if (!s.is_running) {
+                            clearInterval(interval);
+                            fetchStats(); // refresh statistics after scan finishes
+                        }
+                    }, 2000);
+                }
+            } catch (e) {
+                console.error("Error triggering scan:", e);
+            }
+        }
+
+        async function fetchConfig() {
+            try {
+                const r = await fetch('/api/config');
+                const config = await r.json();
+                configData = config;
+                
+                document.getElementById('discord-webhook').value = config.discord_webhook_url || '';
+                document.getElementById('slack-webhook').value = config.slack_webhook_url || '';
+                
+                const threshold = Math.round((config.discount_alert_threshold || 0.15) * 100);
+                document.getElementById('discount-threshold').value = threshold;
+                document.getElementById('threshold-val').innerText = threshold;
+            } catch (e) {
+                console.error("Error fetching config:", e);
+            }
+        }
+
+        async function saveConfig(e) {
+            e.preventDefault();
+            const discordUrl = document.getElementById('discord-webhook').value;
+            const slackUrl = document.getElementById('slack-webhook').value;
+            const threshold = parseFloat(document.getElementById('discount-threshold').value) / 100;
+            
+            const payload = {
+                discord_webhook_url: discordUrl,
+                slack_webhook_url: slackUrl,
+                discount_alert_threshold: threshold
+            };
+            
+            try {
+                const r = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const res = await r.json();
+                if (res.success) {
+                    alert("¡Configuración guardada exitosamente!");
+                    fetchConfig();
+                }
+            } catch (err) {
+                console.error("Error saving config:", err);
+                alert("Error al guardar la configuración.");
+            }
+        }
+
+        function showChart(gpuName, chartUrl) {
+            document.getElementById('modal-gpu-title').innerText = `Distribución de Precios: ${gpuName}`;
+            // Add cache-buster to prevent browser caching old chart image
+            document.getElementById('modal-chart-img').src = `${chartUrl}?t=${new Date().getTime()}`;
+            document.getElementById('chart-modal').classList.add('active');
+        }
+        
+        function closeModal(e) {
+            if (e.target.id === 'chart-modal') {
+                document.getElementById('chart-modal').classList.remove('active');
+            }
+        }
+
+        let allAuctions = [];
+        
+        async function fetchAuctions() {
+            try {
+                const r = await fetch('/api/auctions');
+                allAuctions = await r.json();
+                populateAuctionGpuFilter();
+                filterAuctions();
+            } catch (e) {
+                console.error("Error fetching auctions:", e);
+            }
+        }
+        
+        function populateAuctionGpuFilter() {
+            const filter = document.getElementById('auction-gpu-filter');
+            filter.innerHTML = '<option value="all">Todos los modelos</option>';
+            
+            const models = {};
+            allAuctions.forEach(auc => {
+                models[auc.model_id] = auc.model_name;
+            });
+            
+            for (const [id, name] of Object.entries(models)) {
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.innerText = name;
+                filter.appendChild(opt);
+            }
+        }
+        
+        function filterAuctions() {
+            const gpuVal = document.getElementById('auction-gpu-filter').value;
+            const sortVal = document.getElementById('auction-sort').value;
+            
+            let filtered = [...allAuctions];
+            
+            if (gpuVal !== 'all') {
+                filtered = filtered.filter(auc => auc.model_id === gpuVal);
+            }
+            
+            filtered.sort((a, b) => {
+                if (sortVal === 'margin_desc') {
+                    return b.margin_usd - a.margin_usd;
+                } else if (sortVal === 'price_asc') {
+                    return a.price_usd - b.price_usd;
+                } else if (sortVal === 'bids_desc') {
+                    return b.bids_count - a.bids_count;
+                } else if (sortVal === 'time_asc') {
+                    const parseTime = (str) => {
+                        if (!str) return 999999;
+                        const s = str.toLowerCase();
+                        let total = 0;
+                        const dMatch = s.match(/(\d+)\s*d/);
+                        if (dMatch) total += parseInt(dMatch[1]) * 1440;
+                        const hMatch = s.match(/(\d+)\s*h/);
+                        if (hMatch) total += parseInt(hMatch[1]) * 60;
+                        const mMatch = s.match(/(\d+)\s*m/);
+                        if (mMatch) total += parseInt(mMatch[1]);
+                        
+                        if (total === 0) {
+                            const minMatch = s.match(/(\d+)/);
+                            if (minMatch) return parseInt(minMatch[1]);
+                            return 999999;
+                        }
+                        return total;
+                    };
+                    return parseTime(a.time_left) - parseTime(b.time_left);
+                }
+                return 0;
+            });
+            
+            renderAuctions(filtered);
+        }
+        
+        function renderAuctions(auctions) {
+            const container = document.getElementById('auctions-container');
+            container.innerHTML = '';
+            
+            if (auctions.length === 0) {
+                container.innerHTML = '<div class="no-data">No se encontraron subastas activas de eBay para el filtro seleccionado.</div>';
+                return;
+            }
+            
+            auctions.forEach(auc => {
+                const card = document.createElement('div');
+                card.className = `gpu-card auction-card`;
+                
+                let marginBadgeClass = 'sirve';
+                let marginBadgeText = '';
+                
+                if (auc.margin_usd > 0) {
+                    marginBadgeClass = 'sirve';
+                    marginBadgeText = `🟢 Margen: +$${auc.margin_mxn.toLocaleString(undefined, {maximumFractionDigits: 0})} MXN (+${auc.margin_percent}%)`;
+                } else {
+                    marginBadgeClass = 'no_sirve';
+                    marginBadgeText = `🔴 Sin Margen ($${Math.abs(auc.margin_mxn).toLocaleString(undefined, {maximumFractionDigits: 0})} MXN sobre valor)`;
+                }
+                
+                let timeColorClass = 'time-normal';
+                const tl = (auc.time_left || "").toLowerCase();
+                if (tl.includes('h') && !tl.includes('d')) {
+                    timeColorClass = 'time-critical';
+                } else if (tl.includes('m') && !tl.includes('h') && !tl.includes('d')) {
+                    timeColorClass = 'time-urgent';
+                }
+                
+                card.innerHTML = `
+                    <div class="gpu-card-header">
+                        <div class="gpu-header-info">
+                            <h4 title="${auc.title}">${auc.title}</h4>
+                            <span class="viability-reason-text">Modelo: <strong>${auc.model_name}</strong></span>
+                        </div>
+                    </div>
+                    <div class="auction-meta-badges" style="margin: 10px 0;">
+                        <span class="badge badge-viability ${marginBadgeClass}">${marginBadgeText}</span>
+                    </div>
+                    
+                    <div class="gpu-prices">
+                        <div class="price-box price-mode">
+                            <span class="price-label">Puja Actual</span>
+                            <span class="price-val">$${auc.price_mxn.toLocaleString(undefined, {maximumFractionDigits: 0})} MXN</span>
+                            <span class="price-sub">$${auc.price_usd.toLocaleString()} USD</span>
+                        </div>
+                        <div class="price-box">
+                            <span class="price-label">Valor de Mercado</span>
+                            <span class="price-val">$${auc.mode_price_mxn.toLocaleString(undefined, {maximumFractionDigits: 0})} MXN</span>
+                            <span class="price-sub">$${auc.mode_price_usd.toLocaleString()} USD</span>
+                        </div>
+                    </div>
+                    
+                    <div class="auction-status-bar" style="margin-top: 15px; display: flex; justify-content: space-between; border-top: 1px solid var(--border-color); padding-top: 10px; font-size: 0.9rem;">
+                        <div class="status-stat">
+                            <span class="stat-label" style="color: var(--text-muted);">Pujas:</span>
+                            <span class="stat-val" style="font-weight: 600; color: var(--text-color);">${auc.bids_count}</span>
+                        </div>
+                        <div class="status-stat">
+                            <span class="stat-label" style="color: var(--text-muted);">Tiempo Restante:</span>
+                            <span class="stat-val ${timeColorClass}" style="font-weight: 600;">⏳ ${auc.time_left || 'Desconocido'}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="gpu-card-actions" style="margin-top: 15px;">
+                        <a href="${auc.url}" target="_blank" class="btn btn-primary btn-block" style="text-align: center; display: block; text-decoration: none; line-height: 2.2rem;">Ir a Subasta en eBay</a>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // Initialize dashboard
+        window.onload = function() {
+            fetchStats();
+            fetchStatus();
+            fetchConfig();
+            
+            // Poll basic status every 5 seconds
+            setInterval(fetchStatus, 5000);
+        };
+    </script>
+</body>
+</html>
