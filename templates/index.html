@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Antigravity GPU Price Tracker</title>
+    <title>Antigravity Price Tracker</title>
     <link rel="stylesheet" href="/static/style.css">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,13 +18,13 @@
                 <div class="logo">🚀</div>
                 <div class="brand-text">
                     <h1>Antigravity</h1>
-                    <span>GPU Tracker</span>
+                    <span>Price Tracker</span>
                 </div>
             </div>
             
             <nav class="nav-menu">
                 <button class="nav-item active" onclick="switchTab('dashboard')">
-                    <span class="icon">📊</span> Panel de GPUs
+                    <span class="icon">📊</span> Panel de Precios
                 </button>
                 <button class="nav-item" onclick="switchTab('deals')">
                     <span class="icon">🔥</span> Ofertas Encontradas
@@ -84,8 +84,8 @@
             <!-- Header -->
             <header class="top-header">
                 <div class="header-title">
-                    <h2 id="current-tab-title">Panel de GPUs</h2>
-                    <p id="current-tab-desc">Estadísticas y valor del mercado de tarjetas gráficas en tiempo real.</p>
+                    <h2 id="current-tab-title">Panel de Precios</h2>
+                    <p id="current-tab-desc">Estadísticas y valor del mercado de GPUs y celulares en tiempo real.</p>
                 </div>
                 <div class="header-actions">
                     <span class="time-label">Último Escaneo:</span>
@@ -95,17 +95,29 @@
 
             <!-- Dashboard Tab -->
             <section id="tab-dashboard" class="tab-content active">
-                <div class="filter-bar">
-                    <label for="viability-filter">Filtrar por Viabilidad Vast.ai:</label>
-                    <select id="viability-filter" class="filter-select" onchange="filterCards()">
-                        <option value="all">Todos los modelos</option>
-                        <option value="sirve">🟢 Recomendadas (Sirve)</option>
-                        <option value="condicional">🟡 Condicionales</option>
-                        <option value="no_sirve">🔴 No recomendadas</option>
-                    </select>
+                <div class="filter-bar" style="flex-wrap: wrap; gap: 12px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label for="category-filter">Categoría:</label>
+                        <select id="category-filter" class="filter-select" onchange="filterCards()">
+                            <option value="all">Todos</option>
+                            <option value="gpu">🖥️ GPUs</option>
+                            <option value="phone">📱 Celulares</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <label for="viability-filter">Viabilidad:</label>
+                        <select id="viability-filter" class="filter-select" onchange="filterCards()">
+                            <option value="all">Todos</option>
+                            <option value="excelente">🟢 Excelente</option>
+                            <option value="buena">🟡 Buena</option>
+                            <option value="regular">🟠 Regular</option>
+                            <option value="sirve">🟢 Sirve (GPU)</option>
+                            <option value="condicional">🟡 Condicional (GPU)</option>
+                            <option value="no_sirve">🔴 No sirve (GPU)</option>
+                        </select>
+                    </div>
                 </div>
                 <div class="grid-stats" id="gpu-cards-grid">
-                    <!-- Cards will be dynamically injected here -->
                     <div class="loader-container"><div class="spinner"></div></div>
                 </div>
             </section>
@@ -338,9 +350,8 @@
             
             document.getElementById(`tab-${tabId}`).classList.add('active');
             
-            // Find clicking button
             const navBtn = Array.from(document.querySelectorAll('.nav-item')).find(btn => btn.innerText.includes({
-                'dashboard': 'Panel de GPUs',
+                'dashboard': 'Panel de Precios',
                 'deals': 'Ofertas Encontradas',
                 'auctions': 'Subastas de eBay',
                 'config': 'Configuración',
@@ -352,12 +363,12 @@
             
             // Set Titles
             const titleMap = {
-                'dashboard': ['Panel de GPUs', 'Estadísticas y valor del mercado de tarjetas gráficas en tiempo real.'],
+                'dashboard': ['Panel de Precios', 'Estadísticas y valor del mercado de GPUs y celulares en tiempo real.'],
                 'deals': ['Ofertas Encontradas', 'Listados activos con precios significativamente inferiores al valor real de mercado.'],
                 'auctions': ['Subastas Activas de eBay', 'Monitoreo de subastas en tiempo real comparadas con el valor de mercado para maximizar tu margen.'],
                 'config': ['Configuración del Sistema', 'Modifica los parámetros de búsqueda, umbrales y webhooks de alerta.'],
                 'console': ['Consola de Logs', 'Monitoreo en vivo de la recolección y análisis de datos de eBay y MercadoLibre.'],
-                'suggestions': ['Automatización y Mejoras', 'Sugerencias y propuestas para automatizar la compra de la mejor GPU al menor costo posible.']
+                'suggestions': ['Automatización y Mejoras', 'Sugerencias y propuestas para automatizar la compra del mejor producto al menor costo posible.']
             };
             
             document.getElementById('current-tab-title').innerText = titleMap[tabId][0];
@@ -388,10 +399,14 @@
         }
 
         function filterCards() {
+            const categoryVal = document.getElementById('category-filter').value;
             const viabilityVal = document.getElementById('viability-filter').value;
             let filtered = allGpuStats;
+            if (categoryVal !== 'all') {
+                filtered = filtered.filter(item => item.category === categoryVal);
+            }
             if (viabilityVal !== 'all') {
-                filtered = allGpuStats.filter(gpu => gpu.viability === viabilityVal);
+                filtered = filtered.filter(item => item.viability === viabilityVal);
             }
             renderCards(filtered);
         }
@@ -407,29 +422,39 @@
             
             stats.forEach(gpu => {
                 const hasStats = gpu.mode_price_usd > 0;
+                const isPhoneItem = gpu.category === 'phone';
                 
                 const card = document.createElement('div');
                 card.className = `gpu-card ${hasStats ? '' : 'no-stats'}`;
                 
-                // Determine viability badge
                 let viabilityBadge = '';
-                if (gpu.viability === 'sirve') {
-                    viabilityBadge = `<span class="badge badge-viability sirve" title="Viable para hosting de IA en Vast.ai">🟢 SIRVE</span>`;
-                } else if (gpu.viability === 'condicional') {
-                    viabilityBadge = `<span class="badge badge-viability condicional" title="Viable bajo condiciones específicas (ej. electricidad barata o mods de VRAM)">🟡 CONDICIONAL</span>`;
+                if (isPhoneItem) {
+                    if (gpu.viability === 'excelente') {
+                        viabilityBadge = `<span class="badge badge-viability sirve" title="Excelente relación calidad-precio">🟢 EXCELENTE</span>`;
+                    } else if (gpu.viability === 'buena') {
+                        viabilityBadge = `<span class="badge badge-viability condicional" title="Buena relación calidad-precio">🟡 BUENA</span>`;
+                    } else {
+                        viabilityBadge = `<span class="badge badge-viability no_sirve" title="Regular">🟠 REGULAR</span>`;
+                    }
                 } else {
-                    viabilityBadge = `<span class="badge badge-viability no_sirve" title="No recomendable para Vast.ai (baja VRAM, sin CUDA, etc.)">🔴 NO SIRVE</span>`;
+                    if (gpu.viability === 'sirve') {
+                        viabilityBadge = `<span class="badge badge-viability sirve" title="Viable para hosting de IA en Vast.ai">🟢 SIRVE</span>`;
+                    } else if (gpu.viability === 'condicional') {
+                        viabilityBadge = `<span class="badge badge-viability condicional" title="Viable bajo condiciones específicas">🟡 CONDICIONAL</span>`;
+                    } else {
+                        viabilityBadge = `<span class="badge badge-viability no_sirve" title="No recomendable para Vast.ai">🔴 NO SIRVE</span>`;
+                    }
                 }
 
                 let innerContent = `
                     <div class="gpu-card-header">
                         <div class="gpu-header-info">
-                            <h4>${gpu.name}</h4>
+                            <h4>${isPhoneItem ? '📱 ' : '🖥️ '}${gpu.name}</h4>
                             <span class="viability-reason-text">${gpu.viability_reason}</span>
                         </div>
                         <div class="gpu-header-badges">
                             ${viabilityBadge}
-                            <span class="badge badge-platform ${gpu.is_fallback ? 'fallback' : ''}">${gpu.is_fallback ? 'Precio Referencial' : gpu.sample_count + ' muestras'}</span>
+                            <span class="badge ${isPhoneItem ? 'badge-phone' : ''} ${gpu.is_fallback ? 'fallback' : ''}">${gpu.is_fallback ? 'Precio Referencial' : gpu.sample_count + ' muestras'}</span>
                         </div>
                     </div>
                 `;

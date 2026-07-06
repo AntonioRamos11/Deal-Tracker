@@ -274,5 +274,117 @@
       "viability_reason": "GPU de servidor con 16GB o 32GB de VRAM HBM2. Solo sirve si se aloja en chasis ventilado y con luz barata.",
       "market_price_usd": 450
     }
+  ],
+  "phones": [
+    {
+      "id": "pixel_10a",
+      "name": "Google Pixel 10a",
+      "ebay_query": "Google Pixel 10a",
+      "ml_query": "Google Pixel 10a",
+      "min_price_usd": 250,
+      "max_price_usd": 500,
+      "viability": "excelente",
+      "viability_reason": "Tensor G4, mejor cámara en su rango, 7 años de actualizaciones. Precio-performance inmejorable.",
+      "market_price_usd": 449
+    },
+    {
+      "id": "galaxy_a17",
+      "name": "Samsung Galaxy A17 5G",
+      "ebay_query": "Samsung Galaxy A17 5G",
+      "ml_query": "Samsung Galaxy A17",
+      "min_price_usd": 80,
+      "max_price_usd": 250,
+      "viability": "excelente",
+      "viability_reason": "Mejor relacion precio-especificaciones en gama entrada. 5G, pantalla Super AMOLED, 5000mAh.",
+      "market_price_usd": 165
+    },
+    {
+      "id": "oneplus_15r",
+      "name": "OnePlus 15R",
+      "ebay_query": "OnePlus 15R",
+      "ml_query": "OnePlus 15R",
+      "min_price_usd": 500,
+      "max_price_usd": 900,
+      "viability": "excelente",
+      "viability_reason": "Snapdragon 8 Gen 5, 7400mAh, carga 100W. Potencia maxima por su precio.",
+      "market_price_usd": 799
+    },
+    {
+      "id": "galaxy_s25_fe",
+      "name": "Samsung Galaxy S25 FE",
+      "ebay_query": "Samsung Galaxy S25 FE",
+      "ml_query": "Samsung S25 FE",
+      "min_price_usd": 350,
+      "max_price_usd": 650,
+      "viability": "excelente",
+      "viability_reason": "Flagship asequible con Galaxy AI, pantalla 120Hz, triple camara y 7 anos de updates.",
+      "market_price_usd": 580
+    },
+    {
+      "id": "pixel_10",
+      "name": "Google Pixel 10",
+      "ebay_query": "Google Pixel 10",
+      "ml_query": "Google Pixel 10",
+      "min_price_usd": 350,
+      "max_price_usd": 700,
+      "viability": "excelente",
+      "viability_reason": "Tensor G5, asistente AI avanzado, camara lider. Mejor relacion calidad-precio en flagship.",
+      "market_price_usd": 599
+    },
+    {
+      "id": "galaxy_a36",
+      "name": "Samsung Galaxy A36 5G",
+      "ebay_query": "Samsung Galaxy A36 5G",
+      "ml_query": "Samsung A36",
+      "min_price_usd": 150,
+      "max_price_usd": 350,
+      "viability": "buena",
+      "viability_reason": "Super AMOLED 6.7\", Exynos 4412, expansión SD hasta 1TB. Solido todo-terreno.",
+      "market_price_usd": 256
+    },
+    {
+      "id": "galaxy_s26",
+      "name": "Samsung Galaxy S26",
+      "ebay_query": "Samsung Galaxy S26",
+      "ml_query": "Samsung S26",
+      "min_price_usd": 500,
+      "max_price_usd": 1000,
+      "viability": "excelente",
+      "viability_reason": "Flagship completo con Galaxy AI, pantalla Dynamic AMOLED 2X, rendimiento top.",
+      "market_price_usd": 800
+    },
+    {
+      "id": "nothing_phone_3a",
+      "name": "Nothing Phone (3a)",
+      "ebay_query": "Nothing Phone 3a",
+      "ml_query": "Nothing Phone 3a",
+      "min_price_usd": 200,
+      "max_price_usd": 450,
+      "viability": "buena",
+      "viability_reason": "Diseno unico Glyph, Snapdragon 7s Gen 3, 50MP camara. Excelente por su precio.",
+      "market_price_usd": 379
+    },
+    {
+      "id": "moto_g_play_2026",
+      "name": "Motorola Moto G Play 2026",
+      "ebay_query": "Moto G Play 2026",
+      "ml_query": "Moto G Play 2026",
+      "min_price_usd": 50,
+      "max_price_usd": 150,
+      "viability": "regular",
+      "viability_reason": "Entrada economica. Suficiente para uso basico, bateria de 5000mAh, pantalla 90Hz.",
+      "market_price_usd": 106
+    },
+    {
+      "id": "iphone_16e",
+      "name": "Apple iPhone 16e",
+      "ebay_query": "iPhone 16e",
+      "ml_query": "iPhone 16e",
+      "min_price_usd": 300,
+      "max_price_usd": 600,
+      "viability": "excelente",
+      "viability_reason": "A18 Bionic, camara Fusion 48MP, iOS mas fluido. Mejor relacion calidad-precio en Apple.",
+      "market_price_usd": 499
+    }
   ]
 }

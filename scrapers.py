@@ -160,6 +160,10 @@ def extract_time_left_from_segments(segments):
 
 import random
 
+def is_phone_product(product_id):
+    phone_keywords = ["pixel", "galaxy", "iphone", "oneplus", "moto", "nothing", "redmi", "xiaomi", "huawei", "oppo", "vivo"]
+    return any(k in product_id.lower() for k in phone_keywords)
+
 def generate_simulated_listings(gpu_config, platform, status, count=30, inject_deal=False):
     """Generates realistic simulated listings for testing when real scrapers are IP-blocked."""
     listings = []
@@ -171,58 +175,67 @@ def generate_simulated_listings(gpu_config, platform, status, count=30, inject_d
             "max_price_usd": 500
         }
         
-    gpu_id = gpu_config["id"]
-    gpu_name = gpu_config["name"]
+    product_id = gpu_config["id"]
+    product_name = gpu_config["name"]
     min_p = gpu_config["min_price_usd"]
     max_p = gpu_config["max_price_usd"]
+    is_phone = is_phone_product(product_id)
     
-    # Center price distribution around 45% of range
     center = min_p + (max_p - min_p) * 0.45
     std_dev = (max_p - min_p) * 0.12
     
-    brands = ["ASUS ROG Strix", "EVGA XC3", "Gigabyte Gaming OC", "MSI Ventus 3X", "Zotac Trinity", "PNY XLR8", "ASUS TUF"]
-    if "rx" in gpu_id:
-        brands = ["PowerColor Hellhound", "Sapphire NITRO+", "XFX Speedster", "ASUS ROG Strix", "MSI Gaming X", "Gigabyte Gaming OC"]
-        
-    conditions = ["Excelente estado", "Poco uso", "Usada para gaming", "Completa en caja", "Como nueva", "Nunca minada", "Garantía vigente"]
+    if is_phone:
+        brands = ["Desbloqueado", "Liberado", "Nuevo sellado", "Abierto nunca usado", "Como nuevo", "Garantía vigente"]
+        conditions = ["Excelente estado", "Poco uso", "Completa en caja", "Como nuevo", "Sin rayones", "Batería al 100%"]
+    else:
+        brands = ["ASUS ROG Strix", "EVGA XC3", "Gigabyte Gaming OC", "MSI Ventus 3X", "Zotac Trinity", "PNY XLR8", "ASUS TUF"]
+        if "rx" in product_id:
+            brands = ["PowerColor Hellhound", "Sapphire NITRO+", "XFX Speedster", "ASUS ROG Strix", "MSI Gaming X", "Gigabyte Gaming OC"]
+        conditions = ["Excelente estado", "Poco uso", "Usada para gaming", "Completa en caja", "Como nueva", "Nunca minada", "Garantía vigente"]
     
-    # Determine VRAM
-    vram = "8GB"
-    if "5090" in gpu_id:
-        vram = "32GB"
-    elif "4090" in gpu_id or "3090" in gpu_id:
-        vram = "24GB"
-    elif "5080" in gpu_id or "4080" in gpu_id or "7900" in gpu_id or "6800" in gpu_id or "7800" in gpu_id or "v100" in gpu_id:
-        vram = "16GB"
-    elif "4070" in gpu_id or "3080" in gpu_id or "3060" in gpu_id or "6700" in gpu_id:
-        vram = "12GB"
-    elif "2060" in gpu_id or "1060" in gpu_id:
-        vram = "6GB"
+    spec_suffix = ""
+    if is_phone:
+        storage = random.choice(["128GB", "256GB", "512GB"])
+        color = random.choice(["Negro", "Blanco", "Azul", "Gris", "Verde"])
+        spec_suffix = f" {storage} {color}"
+    else:
+        vram = "8GB"
+        if "5090" in product_id:
+            vram = "32GB"
+        elif "4090" in product_id or "3090" in product_id:
+            vram = "24GB"
+        elif "5080" in product_id or "4080" in product_id or "7900" in product_id or "6800" in product_id or "7800" in product_id or "v100" in product_id:
+            vram = "16GB"
+        elif "4070" in product_id or "3080" in product_id or "3060" in product_id or "6700" in product_id:
+            vram = "12GB"
+        elif "2060" in product_id or "1060" in product_id:
+            vram = "6GB"
+        spec_suffix = f" {random.choice(brands)} {vram}"
         
     for i in range(count):
         price = random.normalvariate(center, std_dev)
-        price = max(min_p, min(max_p, price)) # clamp
+        price = max(min_p, min(max_p, price))
         
-        # Inject an occasional deal for active listings (e.g. 20% cheaper than normal min center)
         if status == 'active' and inject_deal and i == 0:
             price = min_p + (center - min_p) * 0.35
             
-        title = f"{gpu_name} {random.choice(brands)} {vram} - {random.choice(conditions)}"
-        url = f"https://www.{platform}.com/itm/simulated_{gpu_id}_{status}_{i}_{random.randint(1000,9999)}"
+        title = f"{product_name}{spec_suffix} - {random.choice(conditions)}"
+        url = f"https://www.{platform}.com/itm/simulated_{product_id}_{status}_{i}_{random.randint(1000,9999)}"
         
-        # Original price for ML (MXN)
         original_price = price
         currency = "USD"
         if platform == 'mercadolibre':
             currency = "MXN"
-            # 1 USD = 17.4 MXN
             original_price = price * 17.4
             
-        img_url = "https://img.icons8.com/color/96/nvidia.png" if ("rtx" in gpu_id or "gtx" in gpu_id) else "https://img.icons8.com/color/96/amd.png"
+        if is_phone:
+            img_url = "https://img.icons8.com/color/96/smartphone.png"
+        else:
+            img_url = "https://img.icons8.com/color/96/nvidia.png" if ("rtx" in product_id or "gtx" in product_id) else "https://img.icons8.com/color/96/amd.png"
         
         listings.append({
-            "id": f"{platform}_sim_{gpu_id}_{status}_{i}_{random.randint(100000,999999)}",
-            "model_id": gpu_id,
+            "id": f"{platform}_sim_{product_id}_{status}_{i}_{random.randint(100000,999999)}",
+            "model_id": product_id,
             "title": title,
             "price_usd": round(price, 2),
             "original_price": round(original_price, 2),
@@ -870,13 +883,12 @@ def generate_simulated_facebook_listings(gpu_config, city_slug, count=10):
             "max_price_usd": 500
         }
         
-    gpu_id = gpu_config["id"]
-    gpu_name = gpu_config["name"]
+    product_id = gpu_config["id"]
+    product_name = gpu_config["name"]
     min_p = gpu_config["min_price_usd"]
     max_p = gpu_config["max_price_usd"]
+    is_phone = is_phone_product(product_id)
     
-    # Facebook local listings are often a bit cheaper than retail ML/eBay due to cash/no shipping
-    # Let's skew it slightly lower
     center = min_p + (max_p - min_p) * 0.38
     std_dev = (max_p - min_p) * 0.10
     
@@ -888,45 +900,48 @@ def generate_simulated_facebook_listings(gpu_config, city_slug, count=10):
     }
     city_name = city_names.get(city_slug, city_slug.capitalize())
     
-    brands = ["ASUS ROG Strix", "EVGA XC3", "Gigabyte Gaming OC", "MSI Ventus 3X", "Zotac Trinity", "PNY XLR8", "ASUS TUF"]
-    if "rx" in gpu_id:
-        brands = ["PowerColor Hellhound", "Sapphire NITRO+", "XFX Speedster", "ASUS ROG Strix", "MSI Gaming X", "Gigabyte Gaming OC"]
-        
-    conditions = ["Trato directo", "Entrego en plaza", "Como nueva en caja", "Funciona al 100", "Poco uso", "Solo efectivo", "Probada en mi casa"]
-    
-    # VRAM
-    vram = "8GB"
-    if "5090" in gpu_id:
-        vram = "32GB"
-    elif "4090" in gpu_id or "3090" in gpu_id:
-        vram = "24GB"
-    elif "5080" in gpu_id or "4080" in gpu_id or "7900" in gpu_id or "6800" in gpu_id or "7800" in gpu_id or "v100" in gpu_id:
-        vram = "16GB"
-    elif "4070" in gpu_id or "3080" in gpu_id or "3060" in gpu_id or "6700" in gpu_id:
-        vram = "12GB"
-    elif "2060" in gpu_id or "1060" in gpu_id:
-        vram = "6GB"
+    if is_phone:
+        conditions = ["Trato directo", "Entrego en plaza", "Como nuevo en caja", "Funciona al 100", "Poco uso", "Solo efectivo", "Con cargador original"]
+        spec_suffix = f" {random.choice(['128GB', '256GB', '512GB'])} {random.choice(['Negro', 'Blanco', 'Azul'])}"
+    else:
+        brands = ["ASUS ROG Strix", "EVGA XC3", "Gigabyte Gaming OC", "MSI Ventus 3X", "Zotac Trinity", "PNY XLR8", "ASUS TUF"]
+        if "rx" in product_id:
+            brands = ["PowerColor Hellhound", "Sapphire NITRO+", "XFX Speedster", "ASUS ROG Strix", "MSI Gaming X", "Gigabyte Gaming OC"]
+        conditions = ["Trato directo", "Entrego en plaza", "Como nueva en caja", "Funciona al 100", "Poco uso", "Solo efectivo", "Probada en mi casa"]
+        vram = "8GB"
+        if "5090" in product_id:
+            vram = "32GB"
+        elif "4090" in product_id or "3090" in product_id:
+            vram = "24GB"
+        elif "5080" in product_id or "4080" in product_id or "7900" in product_id or "6800" in product_id or "7800" in product_id or "v100" in product_id:
+            vram = "16GB"
+        elif "4070" in product_id or "3080" in product_id or "3060" in product_id or "6700" in product_id:
+            vram = "12GB"
+        elif "2060" in product_id or "1060" in product_id:
+            vram = "6GB"
+        spec_suffix = f" {random.choice(brands)} {vram}"
         
     for i in range(count):
         price = random.normalvariate(center, std_dev)
         price = max(min_p, min(max_p, price))
         
-        # Occasional local hot deal (30% cheaper)
         if i == 0 and random.random() < 0.35:
             price = min_p + (center - min_p) * 0.25
             
-        title = f"[Venta Local - {city_name}] {gpu_name} {random.choice(brands)} {vram} - {random.choice(conditions)}"
-        url = f"https://www.facebook.com/marketplace/{city_slug}/item/simulated_{gpu_id}_{i}_{random.randint(1000,9999)}"
+        title = f"[Venta Local - {city_name}] {product_name}{spec_suffix} - {random.choice(conditions)}"
+        url = f"https://www.facebook.com/marketplace/{city_slug}/item/simulated_{product_id}_{i}_{random.randint(1000,9999)}"
         
-        # Local FB is in MXN
         currency = "MXN"
-        original_price = price * 17.4 # 17.4 exchange rate
+        original_price = price * 17.4
         
-        img_url = "https://img.icons8.com/color/96/nvidia.png" if ("rtx" in gpu_id or "gtx" in gpu_id) else "https://img.icons8.com/color/96/amd.png"
+        if is_phone:
+            img_url = "https://img.icons8.com/color/96/smartphone.png"
+        else:
+            img_url = "https://img.icons8.com/color/96/nvidia.png" if ("rtx" in product_id or "gtx" in product_id) else "https://img.icons8.com/color/96/amd.png"
         
         listings.append({
-            "id": f"facebook_sim_{gpu_id}_{city_slug}_{i}_{random.randint(100000,999999)}",
-            "model_id": gpu_id,
+            "id": f"facebook_sim_{product_id}_{city_slug}_{i}_{random.randint(100000,999999)}",
+            "model_id": product_id,
             "title": title,
             "price_usd": round(price, 2),
             "original_price": round(original_price, 2),
@@ -1066,25 +1081,26 @@ def scrape_facebook_marketplace(query, city_slug="culiacan", max_items=20, gpu_c
         return []
 
 def clean_and_filter_listings(raw_listings, gpu_config, global_negatives):
-    """Filters out accessory items, boxes, scam listings, and items out of price boundaries."""
+    """Filters irrelevant listings by price bounds, negative keywords, and model ID matching."""
     filtered = []
     min_price = gpu_config.get("min_price_usd", 0)
     max_price = gpu_config.get("max_price_usd", 99999)
-    gpu_id = gpu_config.get("id", "")
-    gpu_name = gpu_config.get("name", "").lower()
+    product_id = gpu_config.get("id", "")
+    product_name = gpu_config.get("name", "").lower()
 
-    # --- Dynamic model number extraction from gpu_id ---
-    # Extract all digit-only tokens from the ID, e.g.:
-    #   "rx_6600"      -> ["6600"]
-    #   "rtx_3090"     -> ["3090"]
-    #   "rtx_3060_ti"  -> ["3060"]
-    #   "tesla_v100"   -> ["100"]  (handled specially below as "v100")
-    numeric_tokens = re.findall(r'\d+', gpu_id)
-    # Special case: "v100" must appear as "v100" (not just "100") to avoid matching "1080 Ti"
-    if "v100" in gpu_id:
+    # Extract model tokens: digits + optional letter suffix, e.g.:
+    #   GPU:  "rtx_3090"     -> ["3090"]
+    #         "tesla_v100"   -> ["v100"]
+    #   Phone: "pixel_10a"   -> ["10", "10a"]
+    #          "iphone_16e"  -> ["16", "16e"]
+    #          "nothing_phone_3a" -> ["3", "3a"]
+    numeric_tokens = re.findall(r'\d+', product_id)
+    if "v100" in product_id:
         numeric_tokens = ["v100"]
+    letter_suffix = re.search(r'(\d+[a-z]+)', product_id)
+    if letter_suffix:
+        numeric_tokens.append(letter_suffix.group(1))
 
-    # Simple keyword regex for exclusion
     exclusion_patterns = [re.compile(rf"\b{word}\b", re.IGNORECASE) for word in global_negatives]
 
     for item in raw_listings:
@@ -1092,11 +1108,9 @@ def clean_and_filter_listings(raw_listings, gpu_config, global_negatives):
         price = item["price_usd"]
         words = title.lower()
 
-        # 1. Price Bounds Filter
         if price < min_price or price > max_price:
             continue
 
-        # 2. Exclude negative keywords
         excluded = False
         for pattern in exclusion_patterns:
             if pattern.search(title):
@@ -1105,9 +1119,6 @@ def clean_and_filter_listings(raw_listings, gpu_config, global_negatives):
         if excluded:
             continue
 
-        # 3. Dynamic model-number check — every numeric token from the GPU ID must
-        #    appear in the listing title. This prevents e.g. an "RX 580" listing from
-        #    matching a scan for "RX 6600" because "6600" won't be in the title.
         model_match = all(token in words for token in numeric_tokens)
         if not model_match:
             continue

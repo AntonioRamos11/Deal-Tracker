@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*.db
+scheduler_state.json
+.env
+.venv/
+venv/

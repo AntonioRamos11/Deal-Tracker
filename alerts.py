@@ -68,8 +68,8 @@ def send_discord_webhook(webhook_url, item, stats, discount_pct):
         })
     
     payload = {
-        "username": "GPU Deal Tracker",
-        "avatar_url": "https://img.icons8.com/color/96/nvidia.png", # Nice default icon
+        "username": "Antigravity Deal Tracker",
+        "avatar_url": "https://img.icons8.com/color/96/nvidia.png",
         "embeds": [
             {
                 "title": f"{title_prefix} {item['title']}",
@@ -77,7 +77,7 @@ def send_discord_webhook(webhook_url, item, stats, discount_pct):
                 "color": color,
                 "fields": fields,
                 "footer": {
-                    "text": f"ID: {item['id']} • Detectado por Antigravity GPU Tracker"
+                    "text": f"ID: {item['id']} • Detectado por Antigravity Deal Tracker"
                 }
             }
         ]
@@ -124,7 +124,7 @@ def send_slack_webhook(webhook_url, item, stats, discount_pct):
     # Block layout for Slack
     is_auction = item.get('is_auction', 0) == 1
     platform_name = "EBAY (SUBASTA)" if is_auction else item['platform'].upper()
-    header_text = f"🚨 Nueva Subasta de GPU Detectada: {platform_name}" if is_auction else f"🚨 Nueva GPU Barata Encontrada: {item['platform'].upper()}"
+    header_text = f"🚨 Nueva Subasta Detectada: {platform_name}" if is_auction else f"🚨 Nueva Oferta Encontrada: {item['platform'].upper()}"
     
     price_label = "Puja Actual" if is_auction else "Precio"
     
@@ -171,7 +171,7 @@ def send_slack_webhook(webhook_url, item, stats, discount_pct):
         "elements": [
             {
                 "type": "mrkdwn",
-                "text": f"ID: `{item['id']}` | Detectado por Antigravity GPU Tracker"
+                "text": f"ID: `{item['id']}` | Detectado por Antigravity Deal Tracker"
             }
         ]
     })

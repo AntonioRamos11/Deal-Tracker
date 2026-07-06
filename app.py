@@ -227,6 +227,110 @@ def cleanup_sold_deals(db_path=DB_PATH):
     except Exception as e:
         log_message(f"❌ Error during sold deals cleanup: {e}")
 
+def scan_products(products, category_name, settings, global_negatives, ml_site):
+    """Generic scan logic for a list of products (GPUs or phones)."""
+    for idx, product in enumerate(products):
+        product_id = product["id"]
+        product_name = product["name"]
+        scan_status["progress"] = f"Scanning {product_name} ({idx+1}/{len(products)})..."
+        log_message(f"--- Processing {product_name} [{category_name}] ---")
+        
+        # 1. Scrape eBay completed (sold) listings to establish baseline
+        log_message(f"Scraping eBay SOLD listings for: {product['ebay_query']}")
+        raw_sold = scr.scrape_ebay(product["ebay_query"], status='sold', max_items=80, gpu_config=product)
+        clean_sold = scr.clean_and_filter_listings(raw_sold, product, global_negatives)
+        log_message(f"Found {len(raw_sold)} raw sold listings, {len(clean_sold)} after filtering.")
+        
+        # Save sold listings to database
+        if clean_sold:
+            db.save_listings(clean_sold, DB_PATH)
+            
+        # 2. Calculate Statistics
+        sold_prices = db.get_listings_for_stats(product_id, status='sold', limit=150, db_path=DB_PATH)
+        log_message(f"Total sold sample size for calculations: {len(sold_prices)}")
+        
+        stats = None
+        if len(sold_prices) >= 3:
+            stats = st.calculate_statistics(sold_prices)
+            if stats:
+                db.save_stats(product_id, stats, DB_PATH)
+                log_message(f"Calculated Stats -> Mode: ${stats['mode_price_usd']} | Median: ${stats['median_price_usd']} | Samples: {stats['sample_count']}")
+                
+                chart_path = os.path.join(STATIC_CHARTS_DIR, f"{product_id}.png")
+                st.generate_price_distribution_chart(sold_prices, stats, product_name, chart_path)
+                log_message(f"Generated distribution chart for {product_name}")
+        
+        if stats is None:
+            stats = db.get_latest_stats(product_id, DB_PATH)
+            if stats:
+                log_message(f"Loaded existing stats from DB -> Mode: ${stats['mode_price_usd']} (Samples: {stats['sample_count']})")
+                
+        if stats is None:
+            fallback_price = product.get("market_price_usd") or ((product["min_price_usd"] + product["max_price_usd"]) / 2.0)
+            stats = {
+                "mode_price_usd": fallback_price,
+                "median_price_usd": fallback_price,
+                "mean_price_usd": fallback_price,
+                "min_price_usd": product["min_price_usd"],
+                "max_price_usd": product["max_price_usd"],
+                "sample_count": 0
+            }
+            log_message(f"Using fallback stats from config -> Mode: ${stats['mode_price_usd']}")
+            
+        # 3. Scrape Active Listings
+        log_message(f"Scraping Active listings from eBay, Best Buy, MercadoLibre, and Facebook...")
+        active_ebay_bin = scr.scrape_ebay(product["ebay_query"], status='active', buying_format='bin', max_items=40, gpu_config=product)
+        active_ebay_auc = scr.scrape_ebay(product["ebay_query"], status='active', buying_format='auction', max_items=40, gpu_config=product)
+        
+        active_ml = scr.query_mercadolibre(product["ml_query"], site_id=ml_site, max_items=40, gpu_config=product)
+        
+        fb_cities = ["culiacan", "losmochis", "tijuana", "guadalajara"]
+        active_fb = []
+        for city in fb_cities:
+            log_message(f"Scraping Facebook Marketplace in {city} for: {product['ml_query']}")
+            city_listings = scr.scrape_facebook_marketplace(product["ml_query"], city_slug=city, max_items=10, gpu_config=product)
+            active_fb.extend(city_listings)
+        
+        log_message(f"Scraping Best Buy USA for: {product['ebay_query']}")
+        active_bestbuy = scr.scrape_bestbuy(product["ebay_query"], max_items=20, gpu_config=product)
+        log_message(f"Best Buy found {len(active_bestbuy)} items.")
+
+        all_active = active_ebay_bin + active_ebay_auc + active_ml + active_fb + active_bestbuy
+        clean_active = scr.clean_and_filter_listings(all_active, product, global_negatives)
+        log_message(f"Found {len(all_active)} raw active listings ({len(active_ebay_bin)} eBay BIN, {len(active_ebay_auc)} eBay Auction, {len(active_ml)} MercadoLibre, {len(active_fb)} Facebook, {len(active_bestbuy)} Best Buy). {len(clean_active)} after cleaning.")
+        
+        db.clear_active_listings_for_model(product_id, DB_PATH)
+        
+        if clean_active:
+            db.save_listings(clean_active, DB_PATH)
+            
+        # 4. Check for deals and alert
+        if stats and stats['mode_price_usd'] > 0:
+            deals_found = 0
+            for item in clean_active:
+                listing_id = item["id"]
+                
+                if item.get("is_auction") == 1:
+                    time_left_str = item.get("time_left")
+                    minutes_left = parse_time_left_to_minutes(time_left_str)
+                    if minutes_left > 60:
+                        continue
+                
+                if not db.has_been_alerted(listing_id, DB_PATH):
+                    discount_pct = (stats['mode_price_usd'] - item['price_usd']) / stats['mode_price_usd']
+                    if discount_pct >= settings.get("discount_alert_threshold", 0.15):
+                        log_message(f"🚨 DEAL DETECTED: {item['title']} for ${item['price_usd']:.2f} USD (Market: ${stats['mode_price_usd']:.2f} USD, -{discount_pct*100:.1f}%)")
+                        al.trigger_alerts(item, stats, settings)
+                        db.mark_as_alerted(listing_id, product_id, item['price_usd'], discount_pct, DB_PATH)
+                        deals_found += 1
+                        
+            log_message(f"Finished active scan for {product_name}. Triggered {deals_found} new alerts.")
+        else:
+            log_message(f"Skipping deal detection for {product_name} due to lack of baseline market stats.")
+            
+        import random
+        time.sleep(random.uniform(2.0, 5.0))
+
 def perform_scan_task():
     global scan_status
     scan_status["is_running"] = True
@@ -235,144 +339,33 @@ def perform_scan_task():
     
     try:
         config = load_config()
-        gpus = config.get("gpus", [])
         settings = config.get("settings", {})
         global_negatives = config.get("global_negative_keywords", [])
         ml_site = settings.get("mercadolibre_site_id", "MLM")
         
-        log_message(f"Loaded {len(gpus)} GPU models to scan. MercadoLibre site: {ml_site}")
+        gpus = config.get("gpus", [])
+        phones = config.get("phones", [])
         
-        for idx, gpu in enumerate(gpus):
-            gpu_id = gpu["id"]
-            gpu_name = gpu["name"]
-            scan_status["progress"] = f"Scanning {gpu_name} ({idx+1}/{len(gpus)})..."
-            log_message(f"--- Processing {gpu_name} ---")
-            
-            # 1. Scrape eBay completed (sold) listings to establish baseline
-            log_message(f"Scraping eBay SOLD listings for: {gpu['ebay_query']}")
-            raw_sold = scr.scrape_ebay(gpu["ebay_query"], status='sold', max_items=80, gpu_config=gpu)
-            clean_sold = scr.clean_and_filter_listings(raw_sold, gpu, global_negatives)
-            log_message(f"Found {len(raw_sold)} raw sold listings, {len(clean_sold)} after filtering.")
-            
-            # Save sold listings to database
-            if clean_sold:
-                db.save_listings(clean_sold, DB_PATH)
-                
-            # 2. Calculate Statistics
-            # Retrieve sold prices from database to calculate stats (includes previously scraped data)
-            sold_prices = db.get_listings_for_stats(gpu_id, status='sold', limit=150, db_path=DB_PATH)
-            log_message(f"Total sold sample size for calculations: {len(sold_prices)}")
-            
-            stats = None
-            if len(sold_prices) >= 3:
-                stats = st.calculate_statistics(sold_prices)
-                if stats:
-                    db.save_stats(gpu_id, stats, DB_PATH)
-                    log_message(f"Calculated Stats -> Mode: ${stats['mode_price_usd']} | Median: ${stats['median_price_usd']} | Samples: {stats['sample_count']}")
-                    
-                    # Generate distribution chart
-                    chart_path = os.path.join(STATIC_CHARTS_DIR, f"{gpu_id}.png")
-                    st.generate_price_distribution_chart(sold_prices, stats, gpu_name, chart_path)
-                    log_message(f"Generated distribution chart for {gpu_name}")
-            
-            if stats is None:
-                # Try to load existing stats from DB
-                stats = db.get_latest_stats(gpu_id, DB_PATH)
-                if stats:
-                    log_message(f"Loaded existing stats from DB -> Mode: ${stats['mode_price_usd']} (Samples: {stats['sample_count']})")
-                    
-            if stats is None:
-                # Use fallback from config
-                fallback_price = gpu.get("market_price_usd") or ((gpu["min_price_usd"] + gpu["max_price_usd"]) / 2.0)
-                stats = {
-                    "mode_price_usd": fallback_price,
-                    "median_price_usd": fallback_price,
-                    "mean_price_usd": fallback_price,
-                    "min_price_usd": gpu["min_price_usd"],
-                    "max_price_usd": gpu["max_price_usd"],
-                    "sample_count": 0
-                }
-                log_message(f"Using fallback stats from config -> Mode: ${stats['mode_price_usd']}")
-                
-            # 3. Scrape Active Listings (eBay Buy It Now + Auctions, Best Buy USA, MercadoLibre & Facebook)
-            log_message(f"Scraping Active listings from eBay, Best Buy, MercadoLibre, and Facebook...")
-            active_ebay_bin = scr.scrape_ebay(gpu["ebay_query"], status='active', buying_format='bin', max_items=40, gpu_config=gpu)
-            active_ebay_auc = scr.scrape_ebay(gpu["ebay_query"], status='active', buying_format='auction', max_items=40, gpu_config=gpu)
-            
-            # Scrape MercadoLibre
-            active_ml = scr.query_mercadolibre(gpu["ml_query"], site_id=ml_site, max_items=40, gpu_config=gpu)
-            
-            # Scrape Facebook Marketplace in local cities
-            fb_cities = ["culiacan", "losmochis", "tijuana", "guadalajara"]
-            active_fb = []
-            for city in fb_cities:
-                log_message(f"Scraping Facebook Marketplace in {city} for: {gpu['ml_query']}")
-                city_listings = scr.scrape_facebook_marketplace(gpu[ "ml_query"], city_slug=city, max_items=10, gpu_config=gpu)
-                active_fb.extend(city_listings)
-            
-            # Scrape Best Buy USA (new + open-box)
-            log_message(f"Scraping Best Buy USA for: {gpu['ebay_query']}")
-            active_bestbuy = scr.scrape_bestbuy(gpu["ebay_query"], max_items=20, gpu_config=gpu)
-            log_message(f"Best Buy found {len(active_bestbuy)} items.")
-
-            all_active = active_ebay_bin + active_ebay_auc + active_ml + active_fb + active_bestbuy
-            clean_active = scr.clean_and_filter_listings(all_active, gpu, global_negatives)
-            log_message(f"Found {len(all_active)} raw active listings ({len(active_ebay_bin)} eBay BIN, {len(active_ebay_auc)} eBay Auction, {len(active_ml)} MercadoLibre, {len(active_fb)} Facebook, {len(active_bestbuy)} Best Buy). {len(clean_active)} after cleaning.")
-            
-            # Clear old active listings to ensure no stale/ended listings are tracked
-            db.clear_active_listings_for_model(gpu_id, DB_PATH)
-            
-            if clean_active:
-                db.save_listings(clean_active, DB_PATH)
-                
-            # 4. Check for deals and alert
-            if stats and stats['mode_price_usd'] > 0:
-                deals_found = 0
-                for item in clean_active:
-                    listing_id = item["id"]
-                    
-                    # If it is an eBay auction, only consider it for Deals/Alerts if ending in less than 1 hour (60 minutes)
-                    if item.get("is_auction") == 1:
-                        time_left_str = item.get("time_left")
-                        minutes_left = parse_time_left_to_minutes(time_left_str)
-                        if minutes_left > 60:
-                            # Skip this auction for deals (remains in listings for tracking in the Auctions tab)
-                            continue
-                    
-                    # Check if already alerted
-                    if not db.has_been_alerted(listing_id, DB_PATH):
-                        # Determine if it qualifies as a deal
-                        discount_pct = (stats['mode_price_usd'] - item['price_usd']) / stats['mode_price_usd']
-                        if discount_pct >= settings.get("discount_alert_threshold", 0.15):
-                            log_message(f"🚨 DEAL DETECTED: {item['title']} for ${item['price_usd']:.2f} USD (Market: ${stats['mode_price_usd']:.2f} USD, -{discount_pct*100:.1f}%)")
-                            
-                            # Trigger webhook (sends Slack/Discord if URLs are configured)
-                            al.trigger_alerts(item, stats, settings)
-                            
-                            # Always record in database so it shows in UI dashboard and avoids alert duplication
-                            db.mark_as_alerted(listing_id, gpu_id, item['price_usd'], discount_pct, DB_PATH)
-                            deals_found += 1
-                                
-                log_message(f"Finished active scan for {gpu_name}. Triggered {deals_found} new alerts.")
-            else:
-                log_message(f"Skipping deal detection for {gpu_name} due to lack of baseline market stats.")
-                
-            # Sleep briefly to be respectful to scraped endpoints (mimics human browser behavior)
-            import random
-            time.sleep(random.uniform(2.0, 5.0))
-            
+        log_message(f"Loaded {len(gpus)} GPU models and {len(phones)} phone models to scan.")
+        
+        if gpus:
+            log_message(f"=== Scanning GPUs ({len(gpus)} models) ===")
+            scan_products(gpus, "GPU", settings, global_negatives, ml_site)
+        
+        if phones:
+            log_message(f"=== Scanning Phones ({len(phones)} models) ===")
+            scan_products(phones, "Phone", settings, global_negatives, ml_site)
+        
         # Clean up database
         purged = db.purge_old_listings(days=30, db_path=DB_PATH)
         log_message(f"Purged {purged} raw listings older than 30 days.")
         
-        # Clean up sold/ended deals
         cleanup_sold_deals(DB_PATH)
         
         cul_dt = get_culiacan_datetime()
         scan_status["last_run"] = cul_dt.strftime("%Y-%m-%d %H:%M:%S")
         log_message("=== Scan Completed Successfully ===")
         
-        # Save scheduler state on successful completion to avoid immediate double-runs
         state = load_scheduler_state()
         state["last_scan_epoch"] = cul_dt.timestamp()
         save_scheduler_state(state)
@@ -395,22 +388,29 @@ def get_stats():
     config = load_config()
     usd_to_mxn = 1.0 / scr.get_exchange_rate("MXN", "USD")
     
-    # Enrich stats with GPU details (name, search queries)
     enriched_stats = []
-    gpus_dict = {g['id']: g for g in config.get("gpus", [])}
+    all_products = []
+    for g in config.get("gpus", []):
+        g['category'] = 'gpu'
+        all_products.append(g)
+    for p in config.get("phones", []):
+        p['category'] = 'phone'
+        all_products.append(p)
     
-    for gpu_id, s in stats.items():
-        if gpu_id in gpus_dict:
-            gpu_info = gpus_dict[gpu_id]
-            s['name'] = gpu_info['name']
-            s['min_price_limit'] = gpu_info['min_price_usd']
-            s['max_price_limit'] = gpu_info['max_price_usd']
-            s['min_price_limit_mxn'] = round(gpu_info['min_price_usd'] * usd_to_mxn, 2)
-            s['max_price_limit_mxn'] = round(gpu_info['max_price_usd'] * usd_to_mxn, 2)
-            s['viability'] = gpu_info.get('viability', 'no_sirve')
-            s['viability_reason'] = gpu_info.get('viability_reason', '')
+    products_dict = {p['id']: p for p in all_products}
+    
+    for product_id, s in stats.items():
+        if product_id in products_dict:
+            info = products_dict[product_id]
+            s['name'] = info['name']
+            s['category'] = info.get('category', 'gpu')
+            s['min_price_limit'] = info['min_price_usd']
+            s['max_price_limit'] = info['max_price_usd']
+            s['min_price_limit_mxn'] = round(info['min_price_usd'] * usd_to_mxn, 2)
+            s['max_price_limit_mxn'] = round(info['max_price_usd'] * usd_to_mxn, 2)
+            s['viability'] = info.get('viability', 'no_sirve')
+            s['viability_reason'] = info.get('viability_reason', '')
             
-            # MXN calculations
             s['mode_price_mxn'] = round(s['mode_price_usd'] * usd_to_mxn, 2)
             s['median_price_mxn'] = round(s['median_price_usd'] * usd_to_mxn, 2)
             s['min_price_mxn'] = round(s['min_price_usd'] * usd_to_mxn, 2)
@@ -418,38 +418,38 @@ def get_stats():
             s['usd_to_mxn_rate'] = round(usd_to_mxn, 4)
             s['is_fallback'] = False
             
-            # Check if chart image exists
-            chart_filename = f"{gpu_id}.png"
+            chart_filename = f"{product_id}.png"
             if os.path.exists(os.path.join(STATIC_CHARTS_DIR, chart_filename)):
                 s['chart_url'] = f"/static/charts/{chart_filename}"
             else:
                 s['chart_url'] = None
             enriched_stats.append(s)
             
-    # Include GPUs that have no stats yet as fallbacks
-    for gpu in config.get("gpus", []):
-        if gpu['id'] not in stats:
-            fallback_price = gpu.get("market_price_usd") or ((gpu["min_price_usd"] + gpu["max_price_usd"]) / 2.0)
+    # Include products that have no stats yet as fallbacks
+    for product in all_products:
+        if product['id'] not in stats:
+            fallback_price = product.get("market_price_usd") or ((product["min_price_usd"] + product["max_price_usd"]) / 2.0)
             enriched_stats.append({
-                "model_id": gpu['id'],
-                "name": gpu['name'],
+                "model_id": product['id'],
+                "name": product['name'],
+                "category": product.get('category', 'gpu'),
                 "mode_price_usd": fallback_price,
                 "median_price_usd": fallback_price,
                 "mean_price_usd": fallback_price,
-                "min_price_usd": gpu['min_price_usd'],
-                "max_price_usd": gpu['max_price_usd'],
+                "min_price_usd": product['min_price_usd'],
+                "max_price_usd": product['max_price_usd'],
                 "mode_price_mxn": round(fallback_price * usd_to_mxn, 2),
                 "median_price_mxn": round(fallback_price * usd_to_mxn, 2),
-                "min_price_mxn": round(gpu['min_price_usd'] * usd_to_mxn, 2),
-                "max_price_mxn": round(gpu['max_price_usd'] * usd_to_mxn, 2),
+                "min_price_mxn": round(product['min_price_usd'] * usd_to_mxn, 2),
+                "max_price_mxn": round(product['max_price_usd'] * usd_to_mxn, 2),
                 "sample_count": 0,
                 "chart_url": None,
-                "min_price_limit": gpu['min_price_usd'],
-                "max_price_limit": gpu['max_price_usd'],
-                "min_price_limit_mxn": round(gpu['min_price_usd'] * usd_to_mxn, 2),
-                "max_price_limit_mxn": round(gpu['max_price_usd'] * usd_to_mxn, 2),
-                "viability": gpu.get('viability', 'no_sirve'),
-                "viability_reason": gpu.get('viability_reason', ''),
+                "min_price_limit": product['min_price_usd'],
+                "max_price_limit": product['max_price_usd'],
+                "min_price_limit_mxn": round(product['min_price_usd'] * usd_to_mxn, 2),
+                "max_price_limit_mxn": round(product['max_price_usd'] * usd_to_mxn, 2),
+                "viability": product.get('viability', 'no_sirve'),
+                "viability_reason": product.get('viability_reason', ''),
                 "is_fallback": True
             })
             
